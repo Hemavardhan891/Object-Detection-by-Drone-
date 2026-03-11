@@ -1,0 +1,214 @@
+"""Project Name: Computer Vision Foundations with OpenCV and NumPy
+Author:HEMA VARDHAN
+Features:
+• Hough Circle Transform (cv2.HoughCircles)
+• Affine Transformation (Rotation Matrix)
+• HSV Color Thresholding
+• NumPy Vectorized Brightness Scaling
+• Custom Convolution Kernel (Motion Blur)
+• Matrix-based Image Manipulation
+
+Frameworks & Libraries:
+• OpenCV
+• NumPy
+• Python 3.x
+Install this before run- pip install opencv-python numpy """
+import cv2
+import numpy as np
+import os
+import tkinter as tk
+from tkinter import filedialog
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+OUTPUT_DIR = os.path.join(BASE_DIR, "outputs")
+
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
+
+def choose_image():
+    root = tk.Tk()
+    root.withdraw()
+    file_path = filedialog.askopenfilename(
+        title="Select Image",
+        filetypes=[("Image Files", "*.jpg *.jpeg *.png")]
+    )
+    if file_path == "":
+        print("No image selected.")
+        return None
+    img = cv2.imread(file_path)
+    if img is None:
+        print("Invalid image.")
+        return None
+    filename = os.path.basename(file_path)
+    return img, filename
+
+def landing_pad():
+    data = choose_image()
+    if data is None:
+        return
+
+    img, name = data
+    output = img.copy()
+
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray, (7, 7), 1.5)
+
+    h, w = gray.shape
+
+    circles = cv2.HoughCircles(
+        gray,
+        cv2.HOUGH_GRADIENT,
+        dp=1.2,
+        minDist=min(h, w) // 2,
+        param1=120,
+        param2=60,
+        minRadius=min(h, w) // 4,
+        maxRadius=min(h, w) // 2
+    )
+
+    if circles is not None:
+        circles = np.round(circles[0]).astype("int")
+
+        # Select largest circle only
+        largest = max(circles, key=lambda c: c[2])
+        x, y, r = largest
+
+        cv2.circle(output, (x, y), r, (0, 255, 0), 3)
+        cv2.line(output, (x - 20, y), (x + 20, y), (0, 0, 255), 3)
+        cv2.line(output, (x, y - 20), (x, y + 20), (0, 0, 255), 3)
+
+        print("Landing pad detected at:", (x, y))
+    else:
+        print("No valid landing pad detected.")
+
+    save_path = os.path.join(OUTPUT_DIR, "landing_" + name)
+    cv2.imwrite(save_path, output)
+    print("Saved:", save_path)
+
+    cv2.imshow("Landing Pad Detection", output)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+def horizon():
+    data = choose_image()
+    if data is None:
+        return
+    img, name = data
+
+    angle = float(input("Enter tilt angle (example -15): "))
+
+    h, w = img.shape[:2]
+    center = (w//2, h//2)
+
+    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    rotated = cv2.warpAffine(img, M, (w,h))
+    crop = rotated[20:h-20, 20:w-20]
+
+    save_path = os.path.join(OUTPUT_DIR, "horizon_" + name)
+    cv2.imwrite(save_path, crop)
+    print("Saved:", save_path)
+
+    cv2.imshow("Horizon Leveler", crop)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+def obstacle():
+    data = choose_image()
+    if data is None:
+        return
+    img, name = data
+
+    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+    lower1 = np.array([0,120,70])
+    upper1 = np.array([10,255,255])
+    lower2 = np.array([170,120,70])
+    upper2 = np.array([180,255,255])
+
+    mask1 = cv2.inRange(hsv, lower1, upper1)
+    mask2 = cv2.inRange(hsv, lower2, upper2)
+    mask = mask1 + mask2
+
+    result = cv2.bitwise_and(img, img, mask=mask)
+
+    red_pixels = np.count_nonzero(mask)
+    total_pixels = img.shape[0] * img.shape[1]
+    percent = (red_pixels/total_pixels)*100
+
+    print("Danger Percentage:", round(percent,2))
+    if percent > 10:
+        print("DANGER: OBSTACLE DETECTED!")
+
+    save_path = os.path.join(OUTPUT_DIR, "obstacle_" + name)
+    cv2.imwrite(save_path, result)
+    print("Saved:", save_path)
+
+    cv2.imshow("Obstacle Alert", result)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+def night():
+    data = choose_image()
+    if data is None:
+        return
+    img, name = data
+
+    brightness = int(input("Enter brightness value: "))
+    enhanced = np.clip(img + brightness, 0, 255).astype(np.uint8)
+    combined = np.hstack((img, enhanced))
+
+    save_path = os.path.join(OUTPUT_DIR, "night_" + name)
+    cv2.imwrite(save_path, combined)
+    print("Saved:", save_path)
+
+    cv2.imshow("Night Vision", combined)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+def motion():
+    data = choose_image()
+    if data is None:
+        return
+    img, name = data
+
+    kernel = np.zeros((5,5), dtype=np.float32)
+    kernel[2,:] = 0.2
+
+    blurred = cv2.filter2D(img, -1, kernel)
+
+    save_path = os.path.join(OUTPUT_DIR, "motion_" + name)
+    cv2.imwrite(save_path, blurred)
+    print("Saved:", save_path)
+
+    cv2.imshow("Motion Blur", blurred)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+def main():
+    while True:
+        print("\n1 - Landing Pad")
+        print("2 - Horizon Leveler")
+        print("3 - Obstacle Alert")
+        print("4 - Night Vision")
+        print("5 - Motion Blur")
+        print("0 - Exit")
+
+        choice = input("Enter choice: ")
+
+        if choice == "1":
+            landing_pad()
+        elif choice == "2":
+            horizon()
+        elif choice == "3":
+            obstacle()
+        elif choice == "4":
+            night()
+        elif choice == "5":
+            motion()
+        elif choice == "0":
+            break
+        else:
+            print("Invalid choice.")
+
+if __name__ == "__main__":
+    main()
